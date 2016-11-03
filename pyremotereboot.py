@@ -176,7 +176,7 @@ class TimerClass(threading.Thread):
             # Reboot already scheduled: check if the time is reached
             if reboot_scheduled:
                 # Check if datenow is strictly greater to scheduled time by at least 1 minute (to avoid consecutive reboots...)
-                if datenow >= (reboot_scheduled + datetime.timedelta(minutes=3)):
+                if datenow >= (reboot_scheduled + datetime.timedelta(minutes=1)):
                     if self.verbose:
                         print('Preparing for reboot...')
                     # Send an email? (but try/catch to skip if error)
