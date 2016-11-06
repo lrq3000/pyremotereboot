@@ -48,7 +48,7 @@
 
 from __future__ import print_function, absolute_import
 
-__version__= '0.1'
+__version__= '0.2'
 
 import sys
 import os
@@ -57,20 +57,32 @@ import smtplib
 import datetime, time
 import shlex # to parse the config file just like commandline arguments
 from copy import deepcopy
-import signal
 
-import win32event, win32api, winerror
 import socket
 import fnmatch
 import traceback
 import inspect
-from _winreg import *
+
+import requests
+
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import COMMASPACE, formatdate
 
-import requests
+# Determine the platform
+_WIN = _LIN = _MAC = False
+
+if sys.platform.lower() == 'win32':
+    _WIN = True
+elif os.platform.lower().startswith('linux'):
+    _LIN = True
+elif os.platform.lower() == 'Darwin'
+    _MAC = True
+
+if _WIN:
+    import win32event, win32api, winerror
+    from _winreg import *
 
 # Global vars parameters, you can modify
 reboot_remote_url = 'http://somewebsite.com/reboot_schedule.txt'
@@ -82,12 +94,13 @@ email_user = "some@email.com" # Specify Username Here
 email_pass = "mypass" # Specify Password Here
 email_tls = True
 
-#Disallowing Multiple Instance
-mutex = win32event.CreateMutex(None, 1, 'mutex_var_xboz')
-if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
-    mutex = None
-    print("Multiple Instance not Allowed")
-    sys.exit(0)
+# Disallowing Multiple Instance
+if _WIN:
+    mutex = win32event.CreateMutex(None, 1, 'mutex_var_xboz')
+    if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+        mutex = None
+        print("Multiple Instance not Allowed")
+        sys.exit(0)
 
 def get_script_dir(follow_symlinks=True):
     if getattr(sys, 'frozen', False): # py2exe, PyInstaller, cx_Freeze
@@ -118,9 +131,11 @@ logger = Logger()
 
 #Hide Console
 def hide():
-    import win32console,win32gui
-    window = win32console.GetConsoleWindow()
-    win32gui.ShowWindow(window,0)
+    global _WIN
+    if _WIN:
+        import win32console,win32gui
+        window = win32console.GetConsoleWindow()
+        win32gui.ShowWindow(window,0)
     return True
 
 def msg():
@@ -129,9 +144,9 @@ pyRemoteReboot v%s
 
 usage: pyRemoteReboot.py [startup] [email] [hide] [--help]
 
-[optional] startup: This will add the app to windows startup.
+[optional] startup: This will add the app to windows startup (only on Windows, for Linux you need to add a cron entry @reboot).
 [optional] email: Send an email everytime a reboot is scheduled.
-[optional] hide: In combination with pyinstaller --noconsole, run in daemon mode (no console shown).
+[optional] hide: In combination with pyinstaller --noconsole, run in daemon mode (no console shown) (only on Windows at the moment).
 
 Note: Can also specify the arguments in a file config.cfg placed where this script is located.
 ''' % __version__)
@@ -139,18 +154,19 @@ Note: Can also specify the arguments in a file config.cfg placed where this scri
 
 # Add to startup
 def addStartup():
-    global scriptfilepath
-    keyVal= r'Software\Microsoft\Windows\CurrentVersion\Run'
+    global scriptfilepath, _WIN
+    if _WIN:
+        keyVal= r'Software\Microsoft\Windows\CurrentVersion\Run'
 
-    key2change= OpenKey(HKEY_CURRENT_USER,
-    keyVal,0,KEY_ALL_ACCESS)
-    
-    if len(sys.argv) > 1:
-        path_with_args = "\"%s\" %s" % (scriptfilepath, ' '.join(sys.argv[1:]))
-    else:
-        path_with_args = "\"%s\"" % (scriptfilepath)
+        key2change= OpenKey(HKEY_CURRENT_USER,
+        keyVal,0,KEY_ALL_ACCESS)
+        
+        if len(sys.argv) > 1:
+            path_with_args = "\"%s\" %s" % (scriptfilepath, ' '.join(sys.argv[1:]))
+        else:
+            path_with_args = "\"%s\"" % (scriptfilepath)
 
-    SetValueEx(key2change, "pyRemoteReboot", 0, REG_SZ, path_with_args)
+        SetValueEx(key2change, "pyRemoteReboot", 0, REG_SZ, path_with_args)
 
 class TimerClass(threading.Thread):
     '''Main loop as a thread: check a remote HTTP url for a datetime and compare with current datetime. If in the future, schedule a reboot at the specified datetime'''
@@ -162,6 +178,7 @@ class TimerClass(threading.Thread):
         self.event = threading.Event()
 
     def run(self):
+        global _WIN, _LIN, _MAC
         reboot_scheduled = None # reboot scheduled?
         while not self.event.is_set():
             # Get remote datetime from HTTP url
@@ -192,11 +209,18 @@ class TimerClass(threading.Thread):
                             # Then pass the error
                     # Reset reboot_scheduled flag
                     reboot_scheduled = None
-                    # REBOOT!
+                    # Print a notice about the reboot and wait 5 seconds
                     print('Rebooting NOW!')
                     time.sleep(5)
-                    #win32api.InitiateSystemShutdown()
-                    os.system("shutdown -t 0 -r -f")
+                    # Reboot now!
+                    # Platform specific reboot commands
+                    if _WIN:
+                        #win32api.InitiateSystemShutdown()
+                        os.system("shutdown -t 0 -r -f")
+                    elif _LIN:
+                        os.system("reboot")
+                    elif _MAC:
+                        os.system('shutdown -r now "Force remote reboot by pyRemoteReboot v%s"' % __version__)  # could also use osascript for cleaner reboot...
                 else:
                     if self.verbose:
                         print('Sleeping until scheduled reboot time...')
