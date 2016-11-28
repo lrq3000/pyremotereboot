@@ -77,7 +77,7 @@ if sys.platform.lower() == 'win32':
     _WIN = True
 elif os.platform.lower().startswith('linux'):
     _LIN = True
-elif os.platform.lower() == 'Darwin'
+elif os.platform.lower() == 'Darwin':
     _MAC = True
 
 if _WIN:
