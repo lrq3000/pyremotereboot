@@ -33,6 +33,13 @@ Note: Can also specify the arguments in a file config.cfg placed where this scri
 MIT
 
 ## FAQ
+* How can I package a (frozen) standalone application for Windows/Linux/MacOSX?
+The script supports [pyinstaller](http://www.pyinstaller.org/) to freeze this script for Windows or Linux or MacOSX. Just execute the following line:
+
+`pyinstaller pyremotereboot.py`
+
+And a frozen application ready to be run natively on any of these OSes without needing Python will be built.
+
 * Why this architecture? Why not a socket listener allowing direct connection and instant reboot?
 Most corporate networks have strict firewall and network security measures (which is good), and thus disallow making servers. Usually, TeamViewer (and other UDP hole punching softwares such as WebRTC like filepizza) can go through, but not the rest. UDP hole punching was beyond the timeframe alloted to make this (quick) script, so the approach is much simpler: it simply access a web resource through HTTP. In other words, a simple web page. Since outgoing HTTP is nearly always authorized by security measures, this allows this script to work in pretty much any condition, and thus to fulfill its purpose as a safe switch in case remote control softwares fail.
 
